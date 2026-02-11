@@ -8,6 +8,41 @@
   overflow-y: auto;
   overflow-x: hidden;
 
+  // When the Gemini chat panel is included, adjust layout
+  &.with-gemini-chat {
+    padding: 0;
+    align-items: stretch; // Let children stretch full width
+    justify-content: flex-start;
+
+    .content {
+      padding: var(--spacing-quad);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex: 1;
+      overflow-y: auto;
+      max-width: none; // Override the 600px max-width for the wrapper
+    }
+
+    // Keep the inner suggested actions at a readable width
+    .content > .interstitial-header,
+    .content > .suggested-action-group {
+      width: 100%;
+      max-width: 600px;
+    }
+
+    // Chat panel always stretches full width at the bottom
+    .gemini-chat-panel {
+      width: 100%;
+    }
+
+    // When chat has messages, the normal content is hidden
+    // and the chat takes over the full space
+    .gemini-chat-panel.has-messages {
+      flex: 1;
+    }
+  }
+
   .interstitial-header {
     display: flex;
     flex-direction: row;
@@ -56,6 +91,15 @@
   /** Lessen the padding at 1.5x zoom and above  **/
   @media screen and (max-width: 640px) {
     padding: var(--spacing-double);
+
+    &.with-gemini-chat {
+      padding: 0;
+
+      .content {
+        padding: var(--spacing-double);
+        max-width: none;
+      }
+    }
   }
 
   /** Hide the blankslate image at high zoom levels **/

@@ -754,25 +754,25 @@ function createWindow() {
   const window = new AppWindow()
 
   if (__DEV__) {
-    const {
-      default: installExtension,
-      REACT_DEVELOPER_TOOLS,
-    } = require('electron-devtools-installer')
+    // const {
+    //   default: installExtension,
+    //   REACT_DEVELOPER_TOOLS,
+    // } = require('electron-devtools-installer')
 
-    const axeDevTools = {
-      id: 'lhdoppojpmngadmnindnejefpokejbdd',
-    }
+    // const axeDevTools = {
+    //   id: 'lhdoppojpmngadmnindnejefpokejbdd',
+    // }
 
-    const extensions = [REACT_DEVELOPER_TOOLS, axeDevTools]
+    // const extensions = [REACT_DEVELOPER_TOOLS, axeDevTools]
 
-    try {
-      installExtension(extensions, {
-        loadExtensionOptions: { allowFileAccess: true },
-      })
-      console.log('Added Extensions: "React Developer Tools", "axe DevTools"')
-    } catch (e) {
-      console.log('An error occurred while loading extensions: ', e)
-    }
+    // try {
+    //   installExtension(extensions, {
+    //     loadExtensionOptions: { allowFileAccess: true },
+    //   })
+    //   console.log('Added Extensions: "React Developer Tools", "axe DevTools"')
+    // } catch (e) {
+    //   console.log('An error occurred while loading extensions: ', e)
+    // }
   }
 
   window.onClosed(() => {

@@ -571,6 +571,7 @@ export class RepositoryView extends React.Component<
             pullRequestSuggestedNextAction={
               this.props.pullRequestSuggestedNextAction
             }
+            accounts={this.props.accounts}
           />
         )
       }

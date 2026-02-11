@@ -77,6 +77,7 @@ export class AppWindow {
       windowOptions.titleBarStyle = 'hidden'
     } else if (__WIN32__) {
       windowOptions.frame = false
+      windowOptions.icon = path.join(__dirname, 'static', 'icon-logo.ico')
     } else if (__LINUX__) {
       windowOptions.icon = path.join(__dirname, 'static', 'icon-logo.png')
     }

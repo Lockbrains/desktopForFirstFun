@@ -107,6 +107,8 @@ export enum PopupType {
   GenerateCommitMessageDisclaimer = 'GenerateCommitMessageDisclaimer',
   HookFailed = 'HookFailed',
   CommitProgress = 'CommitProgress',
+  PublishAgent = 'PublishAgent',
+  JenkinsBuild = 'JenkinsBuild',
 }
 
 interface IBasePopup {
@@ -478,5 +480,14 @@ export type PopupDetail =
   | {
       type: PopupType.CommitProgress
       subscribeToCommitOutput: TerminalOutputListener
+    }
+  | {
+      type: PopupType.PublishAgent
+      repository: Repository
+    }
+  | {
+      type: PopupType.JenkinsBuild
+      repository: Repository
+      initialBranch: string | null
     }
 export type Popup = IBasePopup & PopupDetail

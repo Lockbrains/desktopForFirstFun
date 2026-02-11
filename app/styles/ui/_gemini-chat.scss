@@ -1,0 +1,404 @@
+.gemini-chat-panel {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--box-border-color);
+  background-color: var(--background-color);
+  width: 100%;
+
+  &.no-messages {
+    // When no messages, just show the input area at the bottom
+    flex-shrink: 0;
+  }
+
+  &.has-messages {
+    // When there are messages, take up available space
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+}
+
+.gemini-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-double);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing);
+}
+
+.gemini-chat-bubble {
+  display: flex;
+  flex-direction: row;
+  gap: var(--spacing);
+  max-width: 85%;
+  animation: bubble-appear 0.2s ease-out;
+
+  &.user-bubble {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+
+    .bubble-content {
+      background-color: var(--button-background);
+      color: var(--button-text-color);
+      border-radius: 12px 12px 2px 12px;
+    }
+
+    .bubble-role {
+      text-align: right;
+      color: rgba(255, 255, 255, 0.7);
+    }
+  }
+
+  &.model-bubble {
+    align-self: flex-start;
+
+    .bubble-content {
+      background-color: var(--box-alt-background-color);
+      color: var(--text-color);
+      border-radius: 12px 12px 12px 2px;
+    }
+
+    .bubble-role {
+      color: var(--text-secondary-color);
+    }
+  }
+}
+
+.bubble-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+  background-color: var(--box-alt-background-color);
+  margin-top: 2px;
+  overflow: hidden;
+
+  .avatar-container {
+    width: 100%;
+    height: 100%;
+
+    .avatar {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+  }
+}
+
+.bubble-content {
+  padding: 8px 12px;
+  font-size: var(--font-size);
+  line-height: 1.5;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.bubble-role {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: 2px;
+}
+
+.bubble-text {
+  font-size: var(--font-size);
+
+  &.loading-dots {
+    display: flex;
+    gap: 4px;
+    padding: 4px 0;
+
+    span {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: var(--text-secondary-color);
+      animation: dot-pulse 1.4s ease-in-out infinite;
+
+      &:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+
+      &:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+    }
+  }
+}
+
+@keyframes dot-pulse {
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes bubble-appear {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.gemini-chat-error {
+  padding: 6px 12px;
+  margin: 0 var(--spacing-double);
+  background-color: rgba(255, 0, 0, 0.08);
+  border: 1px solid rgba(255, 0, 0, 0.2);
+  border-radius: 6px;
+  color: var(--input-icon-error-color);
+  font-size: var(--font-size-sm);
+}
+
+.gemini-chat-input-area {
+  padding: var(--spacing-half) var(--spacing-double) var(--spacing);
+  flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.gemini-chat-input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--spacing-half);
+  background-color: var(--box-background-color);
+  border: 1px solid var(--box-border-color);
+  border-radius: 8px;
+  padding: 6px 8px;
+  transition: border-color 0.15s ease;
+
+  &:focus-within {
+    border-color: var(--button-background);
+    box-shadow: 0 0 0 2px rgba(3, 102, 214, 0.1);
+  }
+}
+
+.gemini-chat-textarea {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text-color);
+  font-family: var(--font-family-sans-serif);
+  font-size: var(--font-size);
+  line-height: 1.4;
+  resize: none;
+  outline: none;
+  padding: 4px 4px;
+  max-height: 150px;
+  min-height: 44px; // ~2 lines of text
+
+  &::placeholder {
+    color: var(--text-secondary-color);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+  }
+}
+
+.gemini-send-button {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: none;
+  background-color: var(--button-background);
+  color: var(--button-text-color);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background-color: var(--button-hover-background);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+.gemini-chat-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0 4px 0;
+}
+
+.gemini-model-selector-wrapper {
+  position: relative;
+}
+
+.gemini-model-selector-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary-color);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background-color 0.15s ease;
+
+  &:hover {
+    background-color: var(--box-alt-background-color);
+    color: var(--text-color);
+  }
+
+  .dropdown-arrow {
+    font-size: 10px;
+    margin-left: 2px;
+  }
+}
+
+.gemini-model-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 4px;
+  background-color: var(--box-background-color);
+  border: 1px solid var(--box-border-color);
+  border-radius: 6px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+  z-index: 100;
+  min-width: 180px;
+  overflow: hidden;
+}
+
+.gemini-model-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-color);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.1s ease;
+
+  &:hover {
+    background-color: var(--box-alt-background-color);
+  }
+
+  &.selected {
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .check-mark {
+    color: var(--button-background);
+    font-size: 12px;
+  }
+}
+
+.gemini-clear-button {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary-color);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background-color: var(--box-alt-background-color);
+    color: var(--text-color);
+  }
+}
+
+// ── Agent Action Bubbles ──────────────────────────────────────────────
+
+.gemini-action-bubble {
+  align-self: flex-start;
+  max-width: 90%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: var(--font-size-sm);
+  animation: bubble-appear 0.2s ease-out;
+  border-left: 3px solid;
+
+  &.action-success {
+    background-color: rgba(46, 160, 67, 0.08);
+    border-left-color: #2ea043;
+  }
+
+  &.action-error {
+    background-color: rgba(248, 81, 73, 0.08);
+    border-left-color: #f85149;
+  }
+
+  .action-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: var(--font-weight-semibold);
+    margin-bottom: 4px;
+  }
+
+  .action-icon {
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+
+  .action-name {
+    color: var(--text-color);
+    font-size: var(--font-size-sm);
+  }
+
+  .action-args {
+    color: var(--text-secondary-color);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 300px;
+  }
+
+  .action-result {
+    margin-top: 4px;
+
+    pre {
+      margin: 0;
+      padding: 6px 8px;
+      background-color: var(--box-alt-background-color);
+      border-radius: 4px;
+      font-family: var(--font-family-monospace);
+      font-size: 11px;
+      line-height: 1.4;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 200px;
+      overflow-y: auto;
+      color: var(--text-color);
+    }
+  }
+}
+

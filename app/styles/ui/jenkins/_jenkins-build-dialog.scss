@@ -1,0 +1,20 @@
+.jenkins-build-row {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 10px;
+
+  label {
+    font-weight: 600;
+    margin-bottom: 5px;
+  }
+}
+
+.jenkins-build-checkboxes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 15px;
+}
+
+
+

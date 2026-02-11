@@ -31,6 +31,8 @@ import {
   isIdPullRequestSuggestedNextAction,
 } from '../../models/pull-request'
 import { KeyboardShortcut } from '../keyboard-shortcut/keyboard-shortcut'
+import { GeminiChat } from '../gemini-chat'
+import { Account } from '../../models/account'
 
 function formatMenuItemLabel(text: string) {
   if (__WIN32__ || __LINUX__) {
@@ -83,6 +85,9 @@ interface INoChangesProps {
 
   /** The user's preference of pull request suggested next action to use **/
   readonly pullRequestSuggestedNextAction?: PullRequestSuggestedNextAction
+
+  /** The logged in accounts for avatar display */
+  readonly accounts: ReadonlyArray<Account>
 }
 
 /**
@@ -135,6 +140,13 @@ interface INoChangesState {
    * initially appearing.
    */
   readonly enableTransitions: boolean
+
+  /**
+   * Whether the Gemini chat has active messages,
+   * which controls whether we show the normal
+   * interstitial content or the full chat view.
+   */
+  readonly chatActive: boolean
 }
 
 function getItemAcceleratorKeys(item: MenuItem) {
@@ -196,10 +208,13 @@ export class NoChanges extends React.Component<
    */
   private transitionTimer: number | null = null
 
+  private geminiChatRef = React.createRef<GeminiChat>()
+
   public constructor(props: INoChangesProps) {
     super(props)
     this.state = {
       enableTransitions: false,
+      chatActive: false,
     }
   }
 
@@ -760,22 +775,43 @@ export class NoChanges extends React.Component<
     }
   }
 
-  public render() {
+  private onChatStateChange = () => {
+    const chat = this.geminiChatRef.current
+    if (chat) {
+      this.setState({ chatActive: chat.hasMessages() })
+    }
+  }
+
+  private renderNormalContent() {
     return (
-      <div className="changes-interstitial">
-        <div className="content">
-          <div className="interstitial-header">
-            <div className="text">
-              <h1>No local changes</h1>
-              <p>
-                There are no uncommitted changes in this repository. Here are
-                some friendly suggestions for what to do next.
-              </p>
-            </div>
-            <img src={PaperStackImage} className="blankslate-image" alt="" />
+      <div className="content">
+        <div className="interstitial-header">
+          <div className="text">
+            <h1>No local changes</h1>
+            <p>
+              There are no uncommitted changes in this repository. Here are
+              some friendly suggestions for what to do next.
+            </p>
           </div>
-          {this.renderActions()}
+          <img src={PaperStackImage} className="blankslate-image" alt="" />
         </div>
+        {this.renderActions()}
+      </div>
+    )
+  }
+
+  public render() {
+    const { chatActive } = this.state
+
+    return (
+      <div className="changes-interstitial with-gemini-chat">
+        {!chatActive && this.renderNormalContent()}
+        <GeminiChat
+          ref={this.geminiChatRef}
+          repository={this.props.repository}
+          accounts={this.props.accounts}
+          onMessagesChange={this.onChatStateChange}
+        />
       </div>
     )
   }

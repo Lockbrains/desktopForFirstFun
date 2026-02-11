@@ -22,6 +22,8 @@
 @import 'ui/toolbar/button';
 @import 'ui/toolbar/dropdown';
 @import 'ui/toolbar/push-pull-button';
+@import 'ui/toolbar/jenkins-build-button';
+@import 'ui/jenkins/jenkins-build-dialog';
 @import 'ui/tab-bar';
 @import 'ui/panel';
 @import 'ui/popup';
@@ -111,3 +113,4 @@
 @import 'ui/repository-rules/_repo-rules-failure-list';
 @import 'ui/account-picker';
 @import 'ui/call-to-action-bubble';
+@import 'ui/gemini-chat';

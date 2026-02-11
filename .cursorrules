@@ -1,0 +1,40 @@
+# Publish Agent Integration for GitHub Desktop
+
+## Project Goal
+Integrate a team-specific "Publish Agent" into the open-source GitHub Desktop repository. This agent will automate the release process.
+
+## Core Features
+1.  **Create Release Branch**: Automate branch creation after QA/Bug fix.
+2.  **Create Release Notes**: AI-powered generation of release notes from git logs.
+3.  **Trigger Jenkins Build**: Interface with Jenkins to trigger release builds.
+4.  **Browser/Review Operations**: Automate opening PRs or review pages.
+5.  **Hot Patch Pipeline**: Support hot patch workflows.
+
+## Technical Architecture
+-   **Base**: GitHub Desktop (Electron, React, TypeScript).
+-   **UI Integration**:
+    -   Entry point: **Toolbar** (`app/src/ui/toolbar/toolbar.tsx`).
+    -   Interaction: **Modal Dialog** (`PublishDialog`).
+-   **Backend Logic**:
+    -   Git Operations: Reuse `dugite` wrappers in `app/src/lib/git`.
+    -   API Interactions: Reuse `app/src/lib/api.ts` for GitHub; create new helpers for Jenkins/AI.
+
+## Current Phase: MVP
+-   **Objective**: Verify UI integration and basic scaffolding.
+-   **Tasks**:
+    1.  Add "Publish Agent" button to the main Toolbar.
+    2.  Create a basic `PublishDialog` component.
+    3.  Wire up the button to open the dialog.
+
+## Conventions
+-   Follow existing code style (TypeScript, React hooks/classes).
+-   Reuse existing components (`Dialog`, `Button`, `TextBox`) from `app/src/ui/lib`.
+-   **Language**: Respond in Simplified Chinese (简体中文).
+
+## Key Files
+-   `app/src/ui/toolbar/toolbar.tsx`: Main toolbar UI.
+-   `app/src/ui/lib/`: Reusable UI components.
+-   `app/src/lib/git/`: Git operation wrappers.
+
+
+

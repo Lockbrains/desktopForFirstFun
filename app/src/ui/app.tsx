@@ -54,7 +54,9 @@ import {
   DropdownState,
   PushPullButton,
   BranchDropdown,
+  ReleaseDropdown,
   RevertProgress,
+  JenkinsBuildButton,
 } from './toolbar'
 import { iconForRepository, OcticonSymbol } from './octicons'
 import * as octicons from './octicons/octicons.generated'
@@ -82,7 +84,6 @@ import { SignIn } from './sign-in'
 import { InstallGit } from './install-git'
 import { EditorError } from './editor'
 import { About } from './about'
-import { Publish } from './publish-repository'
 import { Acknowledgements } from './acknowledgements'
 import { UntrustedCertificate } from './untrusted-certificate'
 import { NoRepositoriesView } from './no-repositories'
@@ -95,6 +96,7 @@ import { ShellError } from './shell'
 import { InitializeLFS, AttributeMismatch } from './lfs'
 import { UpstreamAlreadyExists } from './upstream-already-exists'
 import { ReleaseNotes } from './release-notes'
+import { Publish } from './publish-repository'
 import { DeletePullRequest } from './delete-branch/delete-pull-request-dialog'
 import { CommitConflictsWarning } from './merge-conflicts'
 import { AppTheme } from './app-theme'
@@ -236,6 +238,8 @@ export const bannerTransitionTimeout = { enter: 500, exit: 400 }
  * changes. See https://github.com/desktop/desktop/issues/1398.
  */
 const ReadyDelay = 100
+import { JenkinsBuildDialog } from './jenkins/jenkins-build-dialog'
+
 export class App extends React.Component<IAppProps, IAppState> {
   private loading = true
 
@@ -1469,6 +1473,18 @@ export class App extends React.Component<IAppProps, IAppState> {
     const onPopupDismissedFn = this.getOnPopupDismissedFn(popup.id)
 
     switch (popup.type) {
+      case PopupType.PublishAgent:
+        // PublishAgent dialog removed - functionality moved to ReleaseDropdown in toolbar
+        return null
+      case PopupType.JenkinsBuild:
+        return (
+          <JenkinsBuildDialog
+            key="jenkins-build"
+            repository={popup.repository}
+            initialBranch={popup.initialBranch}
+            onDismissed={onPopupDismissedFn}
+          />
+        )
       case PopupType.RenameBranch:
         return (
           <RenameBranch
@@ -3197,6 +3213,43 @@ export class App extends React.Component<IAppProps, IAppState> {
     )
   }
 
+  private renderPublishAgentToolbarButton() {
+    const repository = this.state.selectedState?.repository
+    if (!repository || !(repository instanceof Repository)) {
+      return null
+    }
+
+    return (
+      <ReleaseDropdown repository={repository} />
+    )
+  }
+
+  private renderBuildPipelineToolbarButton() {
+    const repository = this.state.selectedState?.repository
+    if (!repository || !(repository instanceof Repository)) {
+      return null
+    }
+
+    const state = this.state.selectedState
+    let currentBranchName: string | null = null
+
+    if (state && state.type === SelectionType.Repository) {
+       const tip = state.state.branchesState.tip
+       if (tip.kind === TipState.Valid) {
+           currentBranchName = tip.branch.name
+       } else if (tip.kind === TipState.Detached) {
+           // For detached head, maybe we send the SHA or nothing? 
+           // Jenkins BRANCH parameter usually expects a branch name, 
+           // but SHA might work depending on git checkout setup in Jenkins.
+           currentBranchName = tip.currentSha
+       }
+    }
+
+    return (
+      <JenkinsBuildButton branchName={currentBranchName} repository={repository} dispatcher={this.props.dispatcher} />
+    )
+  }
+
   private showCreateBranch = () => {
     const selection = this.state.selectedState
 
@@ -3393,6 +3446,8 @@ export class App extends React.Component<IAppProps, IAppState> {
         </div>
         {this.renderBranchToolbarButton()}
         {this.renderPushPullToolbarButton()}
+        {this.renderPublishAgentToolbarButton()}
+        {this.renderBuildPipelineToolbarButton()}
       </Toolbar>
     )
   }
