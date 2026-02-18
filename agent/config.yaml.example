@@ -1,0 +1,30 @@
+# Release Agent 配置文件
+# 复制此文件为 config.yaml 并填入实际值
+# ⚠️  config.yaml 不应提交到 Git
+
+app:
+  name: "Wingstrike"
+  android:
+    package_name: "com.LCYD.StarFire"
+    service_account_json: "/path/to/google-play-service-account.json"
+  ios:
+    bundle_id: "com.LCYD.StarFire"
+    api_key_path: "/path/to/AuthKey_XXXXX.p8"
+    api_key_id: "XXXXXXXXXX"
+    api_issuer_id: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+jenkins:
+  base_url: "http://192.168.50.249:8080"
+  user: ""          # 留空则从环境变量 JENKINS_USER 读取
+  token: ""         # 留空则从环境变量 JENKINS_TOKEN 读取
+  build_output_dir: "/Users/jenkins/workspace/builds"
+  pipelines:
+    android-debug: "StarFire-Android-Debug-Pipeline"
+    android-release: "StarFire-Android-Release"
+    ios-debug: "StarFire-iOS-Debug-Pipeline"
+    ios-release: "StarFire-iOS-Release-Pipeline"
+
+gemini:
+  api_key: ""       # 留空则从环境变量 GEMINI_API_KEY 读取
+  model: "gemini-2.0-flash"
+

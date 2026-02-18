@@ -215,7 +215,7 @@ export class ReleaseDropdown extends React.Component<
         .map(c => `- [${c.shortSha}] ${c.summary}${c.body ? '\n  ' + c.body.trim() : ''}`)
         .join('\n')
 
-      const prompt = `You are a release note generator for a game project called "Wingfall" (a mobile aerial combat game). Based on the following git commit logs from the main branch, generate TWO sections of release notes following our project's changelog instructions.
+      const prompt = `You are a release note generator for a game project called "Wingstrike" (a mobile aerial combat game). Based on the following git commit logs from the main branch, generate TWO sections of release notes following our project's changelog instructions.
 
 ## Commit Logs (last ${contextLength} commits, --first-parent only):
 ${commitMessages}

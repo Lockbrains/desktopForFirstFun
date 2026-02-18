@@ -1,0 +1,16 @@
+# 敏感配置（含凭证）
+config.yaml
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# 生成的 Release Notes
+release_notes/
+
+# 临时文件
+*.tmp
+
