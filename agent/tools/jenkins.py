@@ -4,6 +4,8 @@ Jenkins 构建触发模块。
 """
 
 import base64
+import time
+from pathlib import Path
 from typing import Optional
 from urllib.parse import urlencode
 
@@ -14,6 +16,7 @@ from .config import (
     get_jenkins_pipeline,
     get_jenkins_user,
     get_jenkins_token,
+    get_jenkins_build_output_dir,
 )
 
 
@@ -61,18 +64,16 @@ def trigger_build(
     mode: str,
     branch: str = "main",
     build_type: Optional[str] = None,
-    table_env: Optional[str] = None,
     install_type: Optional[str] = None,
 ) -> dict:
     """
-    触发 Jenkins 构建。
+    触发 Jenkins 构建。表格环境固定为 dev，不可改。
 
     Args:
         platform: 'ios' 或 'android'
         mode: 'debug' 或 'release'
         branch: 构建分支
         build_type: Android='APK'/'HotUpdate', iOS='App'/'HotUpdate'
-        table_env: 'dev'/'test'/'production'
         install_type: iOS 专用 'Adhoc'/'Xcode'/'TestFlight'
 
     Returns:
@@ -92,8 +93,25 @@ def trigger_build(
     is_debug = mode == "debug"
 
     # 默认值
-    final_build_type = build_type or ("App" if is_ios else "APK")
-    final_table_env = table_env or ("dev" if is_debug else "test")
+    raw_build_type = build_type or ("App" if is_ios else "APK")
+    # Android Jenkins 只接受 APK/HotUpdate；传 App 会触发 HTTP 500，此处做平台归一化
+    if platform == "android" and raw_build_type == "App":
+        final_build_type = "APK"
+    elif platform == "ios" and raw_build_type == "APK":
+        final_build_type = "App"
+    else:
+        final_build_type = raw_build_type
+
+    # Android 仅允许 APK / HotUpdate，否则 Jenkins 可能 500
+    if platform == "android" and final_build_type not in ("APK", "HotUpdate"):
+        return {
+            "success": False,
+            "message": f"Android 仅支持 build_type: APK 或 HotUpdate，当前为: {final_build_type}。"
+            "（iOS 使用 App/HotUpdate）",
+        }
+
+    # 表格环境固定为 dev，不提供修改入口
+    final_table_env = "dev"
     final_install_type = install_type or "Adhoc"
 
     base_url = get_jenkins_base_url()
@@ -129,7 +147,7 @@ def trigger_build(
     if 200 <= resp.status_code < 300:
         return {
             "success": True,
-            "message": "构建已触发",
+            "message": "构建已触发（TABLE_ENV=dev）",
             "pipeline": pipeline_name,
             "branch": branch,
             "build_type": final_build_type,
@@ -181,4 +199,65 @@ def get_build_status(platform: str, mode: str, count: int = 3) -> dict:
         }
     except requests.RequestException as e:
         return {"success": False, "message": f"网络错误: {e}"}
+
+
+def get_latest_build_number(platform: str, mode: str) -> Optional[int]:
+    """获取最近一次构建的 number，无构建时返回 None。"""
+    r = get_build_status(platform=platform, mode=mode, count=1)
+    if not r.get("success") or not r.get("builds"):
+        return None
+    return r["builds"][0].get("number")
+
+
+def wait_for_build(
+    platform: str,
+    mode: str,
+    after_build_number: Optional[int] = None,
+    poll_interval: int = 60,
+    timeout_seconds: int = 7200,
+) -> dict:
+    """
+    轮询直到在 after_build_number 之后出现一次新构建并完成。
+    Returns: {"success": bool, "message": str, "build_number": int|None, "result": str}
+    """
+    if after_build_number is None:
+        after_build_number = get_latest_build_number(platform, mode) or 0
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        r = get_build_status(platform=platform, mode=mode, count=5)
+        if not r.get("success"):
+            time.sleep(poll_interval)
+            continue
+        for b in r.get("builds", []):
+            num = b.get("number")
+            if num is None or num <= after_build_number:
+                continue
+            result = b.get("result") or "RUNNING"
+            if result in ("SUCCESS", "FAILURE", "UNSTABLE", "ABORTED"):
+                return {
+                    "success": result == "SUCCESS",
+                    "message": f"构建 #{num} 完成: {result}",
+                    "build_number": num,
+                    "result": result,
+                }
+        time.sleep(poll_interval)
+    return {
+        "success": False,
+        "message": f"等待构建超时（{timeout_seconds}s）",
+        "build_number": None,
+        "result": None,
+    }
+
+
+def resolve_android_aab_path(build_number: int) -> Optional[str]:
+    """根据 Jenkins 构建号解析 Android Release AAB 路径（约定：build_output_dir/PipelineName/build_number/*.aab）。"""
+    pipeline_name = get_jenkins_pipeline("android-release") or PIPELINE_MAP.get("android-release", "")
+    if not pipeline_name:
+        return None
+    base = get_jenkins_build_output_dir()
+    dir_path = Path(base) / pipeline_name / str(build_number)
+    if not dir_path.exists():
+        return None
+    aabs = list(dir_path.glob("*.aab"))
+    return str(aabs[0].resolve()) if aabs else None
 

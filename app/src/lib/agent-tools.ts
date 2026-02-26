@@ -177,11 +177,6 @@ export const agentToolDeclarations = [
           description:
             'For Android: "APK" or "HotUpdate". For iOS: "App" or "HotUpdate". Default: APK for Android, App for iOS.',
         },
-        table_env: {
-          type: 'STRING',
-          description:
-            'Table environment. Default: "dev" for debug, "test" for release.',
-        },
         install_type: {
           type: 'STRING',
           description:
@@ -570,7 +565,7 @@ async function executeTriggerBuild(
   repository: Repository,
   args: Record<string, any>
 ): Promise<string> {
-  const { platform, build_mode, branch, build_type, table_env, install_type } = args
+  const { platform, build_mode, branch, build_type, install_type } = args
 
   const pipelineKey = `${platform}-${build_mode}`
   const selectedPipeline = PIPELINE_MAP[pipelineKey]
@@ -609,7 +604,7 @@ async function executeTriggerBuild(
 
   const finalBuildType =
     build_type || (isIOS ? 'App' : 'APK')
-  const finalTableEnv = table_env || (isDebug ? 'dev' : 'test')
+  const finalTableEnv = 'dev' // 固定 dev，不提供修改
   const finalInstallType = install_type || 'Adhoc'
 
   // Fetch crumb

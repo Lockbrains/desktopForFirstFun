@@ -8,16 +8,22 @@ app:
     package_name: "com.LCYD.StarFire"
     service_account_json: "/path/to/google-play-service-account.json"
   ios:
-    bundle_id: "com.LCYD.StarFire"
+    bundle_id: "com.wingfall.ios"   # App Store Connect 实际 Bundle ID
     api_key_path: "/path/to/AuthKey_XXXXX.p8"
     api_key_id: "XXXXXXXXXX"
     api_issuer_id: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    # Xcode → IPA 命令行导出（与 IOS_BUILD_PIPELINE.md 约定一致）
+    workspace_path: "/path/to/Wingstrike.xcworkspace"
+    scheme: "Wingstrike"
+    export_options_plist: "/path/to/ios_export/ExportOptions_adhoc.plist"
 
 jenkins:
   base_url: "http://192.168.50.249:8080"
   user: ""          # 留空则从环境变量 JENKINS_USER 读取
   token: ""         # 留空则从环境变量 JENKINS_TOKEN 读取
   build_output_dir: "/Users/jenkins/workspace/builds"
+  # Jenkins iOS Release 产出的 IPA 固定路径（用于 release 流程自动上传）
+  ios_ipa_output_path: "/Users/ffmac/.jenkins/workspace/StarFire-iOS-Release-Pipeline/build/ipa_output/Wingstrike.ipa"
   pipelines:
     android-debug: "StarFire-Android-Debug-Pipeline"
     android-release: "StarFire-Android-Release"

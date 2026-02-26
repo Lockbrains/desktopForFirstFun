@@ -40,13 +40,13 @@ def cli(ctx, config, json_output):
 
 
 def _output(ctx, data: dict):
-    """统一输出。json_output 模式输出 JSON，否则友好文本。"""
+    """统一输出。json_output 模式输出 JSON，否则友好文本。无 success 键时视为失败。"""
     if ctx.obj.get("json_output"):
         click.echo(json.dumps(data, ensure_ascii=False, indent=2))
     else:
-        success = data.get("success", True)
+        success = data.get("success", False) if "success" in data else False
         icon = "✅" if success else "❌"
-        msg = data.get("message", "")
+        msg = data.get("message", "") or ("无返回信息" if not success else "")
         click.echo(f"{icon} {msg}")
         for k, v in data.items():
             if k in ("success", "message"):
@@ -205,12 +205,15 @@ def build():
 @click.option("--platform", "-p", required=True, type=click.Choice(["ios", "android"]))
 @click.option("--mode", "-m", required=True, type=click.Choice(["debug", "release"]))
 @click.option("--branch", "-b", default=None, help="构建分支（默认当前分支）")
-@click.option("--build-type", default=None, help="构建类型: APK/App/HotUpdate")
-@click.option("--table-env", default=None, help="表格环境: dev/test/production")
+@click.option(
+    "--build-type",
+    default=None,
+    help="构建类型: Android 仅支持 APK/HotUpdate；iOS 支持 App/HotUpdate（传 App 时 Android 会自动用 APK）",
+)
 @click.option("--install-type", default=None, help="iOS 安装类型: Adhoc/TestFlight")
 @click.pass_context
-def build_trigger(ctx, platform, mode, branch, build_type, table_env, install_type):
-    """触发 Jenkins 构建"""
+def build_trigger(ctx, platform, mode, branch, build_type, install_type):
+    """触发 Jenkins 构建（表格环境固定为 dev）"""
     from tools.jenkins import trigger_build
     from tools.git_ops import get_current_branch
 
@@ -225,7 +228,6 @@ def build_trigger(ctx, platform, mode, branch, build_type, table_env, install_ty
         mode=mode,
         branch=branch,
         build_type=build_type,
-        table_env=table_env,
         install_type=install_type,
     )
     _output(ctx, result)
@@ -295,8 +297,10 @@ def gplay():
 @click.option("--release-notes-file", default=None, help="从文件读取发布说明")
 @click.option("--rollout", default=100.0, type=float, help="灰度比例 0-100")
 @click.option("--draft", is_flag=True, default=False, help="作为草稿上传")
+@click.option("--debug", is_flag=True, default=False, envvar="GPLAY_DEBUG",
+              help="打印 HTTP 请求/响应详情，便于排查重定向等问题；可设环境变量 GPLAY_DEBUG=1")
 @click.pass_context
-def gplay_upload(ctx, aab, track, version, release_name, release_notes, release_notes_file, rollout, draft):
+def gplay_upload(ctx, aab, track, version, release_name, release_notes, release_notes_file, rollout, draft, debug):
     """上传 AAB 到 Google Play"""
     from tools.google_play import upload_bundle
 
@@ -309,6 +313,9 @@ def gplay_upload(ctx, aab, track, version, release_name, release_notes, release_
             _output(ctx, {"success": False, "message": f"读取 release notes 文件失败: {e}"})
             return
 
+    if debug:
+        click.echo("HTTP 调试已开启，请求/响应会打印到终端；建议用 2>&1 | tee upload.log 保存完整输出以便排查。")
+
     result = upload_bundle(
         aab_path=aab,
         track=track,
@@ -317,8 +324,13 @@ def gplay_upload(ctx, aab, track, version, release_name, release_notes, release_
         rollout_percentage=rollout,
         version=version,
         draft=draft,
+        debug=debug,
     )
     _output(ctx, result)
+    if result.get("success"):
+        click.echo("建议执行: python cli.py gplay status  以确认 Play Console 上是否出现新版本。")
+    elif not result.get("success") and result.get("message"):
+        click.echo("若为超时，可稍后重试；结果以 gplay status 或 Play Console 为准。")
 
 
 @gplay.command("promote")
@@ -390,17 +402,83 @@ def appstore():
     pass
 
 
+@appstore.command("build-ipa")
+@click.option("--workspace", "-w", default=None, help=".xcworkspace 路径（默认从 config app.ios.workspace_path 读取）")
+@click.option("--scheme", "-s", default=None, help="Scheme 名称（默认从 config app.ios.scheme 读取）")
+@click.option("--configuration", "-c", default="Release", help="Configuration，默认 Release")
+@click.option("--export-options", "-e", default=None, help="ExportOptions.plist 路径（默认从 config app.ios.export_options_plist 读取）")
+@click.option("--output-dir", "-o", default=None, help="IPA 导出目录（不填则用 workspace 同级的 build/ipa_export）")
+@click.pass_context
+def appstore_build_ipa(ctx, workspace, scheme, configuration, export_options, output_dir):
+    """从 Xcode 工程打出 IPA（archive + exportArchive），供本机或 Jenkins 调用"""
+    from tools.xcode_export import build_ipa
+    from tools.config import (
+        get_ios_workspace_path,
+        get_ios_scheme,
+        get_ios_export_options_plist,
+    )
+
+    workspace = workspace or get_ios_workspace_path()
+    scheme = scheme or get_ios_scheme()
+    export_options = export_options or get_ios_export_options_plist()
+
+    if not workspace:
+        _output(ctx, {"success": False, "message": "未配置 workspace_path，请设置 config app.ios.workspace_path 或传 --workspace"})
+        return
+    if not export_options:
+        _output(ctx, {"success": False, "message": "未配置 export_options_plist，请设置 config app.ios.export_options_plist 或传 --export-options"})
+        return
+
+    result = build_ipa(
+        workspace_path=workspace,
+        scheme=scheme,
+        configuration=configuration,
+        export_options_plist=export_options,
+        export_path=output_dir,
+    )
+    _output(ctx, result)
+
+
 @appstore.command("upload")
 @click.option("--ipa", required=True, help=".ipa 文件路径")
 @click.option("--method", default="altool", type=click.Choice(["altool", "transporter"]),
-              help="上传方式")
+              help="上传方式（默认 altool，与 Xcode 同链路；transporter 存在假成功问题）")
+@click.option("--verify/--no-verify", default=True,
+              help="上传后自动查询 ASC builds 验证是否出现 PROCESSING 记录（默认开启）")
 @click.pass_context
-def appstore_upload(ctx, ipa, method):
+def appstore_upload(ctx, ipa, method, verify):
     """上传 IPA 到 App Store Connect"""
-    from tools.app_store import upload_ipa
+    from tools.app_store import upload_ipa, list_builds
+    import time
 
     result = upload_ipa(ipa_path=ipa, method=method)
     _output(ctx, result)
+
+    if result.get("success") and verify:
+        click.echo("\n--- 自动验证：查询 App Store Connect builds ---")
+        click.echo("等待 15 秒让 Apple 处理...")
+        time.sleep(15)
+        builds_result = list_builds(limit=5)
+        if builds_result.get("success"):
+            builds = builds_result.get("builds", [])
+            if builds:
+                click.echo(f"最新 {len(builds)} 条 builds:")
+                for b in builds:
+                    state = b.get("processing_state", "?")
+                    ver = b.get("version", "?")
+                    date = b.get("uploaded_date", "?")
+                    marker = " ← 新上传?" if state == "PROCESSING" else ""
+                    click.echo(f"  Build {ver} | {state} | {date}{marker}")
+                processing = [b for b in builds if b.get("processing_state") == "PROCESSING"]
+                if processing:
+                    click.echo(f"\n✅ 发现 {len(processing)} 个 PROCESSING 状态的 build，Apple 侧已收到。")
+                else:
+                    click.echo("\n⚠️ 未发现 PROCESSING 状态的 build。可能 Apple 还在处理，"
+                               "建议 1-2 分钟后再执行: python3 cli.py appstore builds")
+            else:
+                click.echo("  未返回任何 build 记录。")
+        else:
+            click.echo(f"  验证查询失败: {builds_result.get('message')}")
 
 
 @appstore.command("create-version")
@@ -468,6 +546,17 @@ def appstore_status(ctx):
     from tools.app_store import get_app_status
 
     result = get_app_status()
+    _output(ctx, result)
+
+
+@appstore.command("builds")
+@click.option("--limit", "-n", default=20, help="最多列出多少条 build，默认 20")
+@click.pass_context
+def appstore_builds(ctx, limit):
+    """列出所有构建及 processing 状态（PROCESSING/VALID/INVALID/FAILED），用于确认上传后的 build 是否已就绪"""
+    from tools.app_store import list_builds
+
+    result = list_builds(limit=limit)
     _output(ctx, result)
 
 
@@ -544,6 +633,126 @@ def git_create_release_branch_cmd(ctx, repo_path, name, base):
 def release():
     """完整发布流程编排"""
     pass
+
+
+@release.command("run")
+@click.option("--platform", "-p", required=True, type=click.Choice(["android", "ios"]), help="android 或 ios")
+@click.option("--version", "-v", required=True, help="版本号，如 2.0.6")
+@click.option("--branch", "-b", default=None, help="Release 分支名，不填则用 release_MMDD（如 release_0225）")
+@click.option("--repo-path", default=".", help="Git 仓库路径")
+@click.option("--skip-notes", is_flag=True, default=False, help="跳过 Release Notes 生成")
+@click.option("--skip-upload", is_flag=True, default=False, help="仅打包不上传")
+@click.option("--poll-interval", default=60, help="轮询 Jenkins 状态间隔（秒）")
+@click.option("--build-timeout", default=7200, help="等待构建完成超时（秒），默认 2 小时")
+@click.option("--dry-run", is_flag=True, default=False, help="仅打印计划不执行")
+@click.pass_context
+def release_run(
+    ctx, platform, version, branch, repo_path, skip_notes, skip_upload,
+    poll_interval, build_timeout, dry_run,
+):
+    """一键发布：检查/创建 release 分支 → 触发 Jenkins → 等待产物 → 上传（Agent 调用此命令即可，避免多步超时）"""
+    if branch is None:
+        from datetime import datetime
+        branch = f"release_{datetime.now().strftime('%m%d')}"
+    click.echo(f"📋 一键发布计划: {platform} v{version}")
+    click.echo(f"   分支: {branch} | Release Notes: {'跳过' if skip_notes else '生成'} | 上传: {'否' if skip_upload else '是'}")
+    click.echo("")
+
+    if dry_run:
+        click.echo("🔍 Dry run，不执行。")
+        return
+
+    # 1. 确保 release 分支存在
+    click.echo("🔀 Step 1: 检查/创建 release 分支...")
+    from tools.git_ops import ensure_release_branch
+    r = ensure_release_branch(branch_name=branch, base="main", repo_path=repo_path, push=True)
+    _output(ctx, r)
+    if not r.get("success"):
+        return
+
+    # 2. Release Notes（可选）
+    gplay_notes_file = None
+    appstore_notes_file = None
+    if not skip_notes:
+        click.echo("\n📝 Step 2: 生成 Release Notes...")
+        from tools.release_notes import generate_release_notes
+        result = generate_release_notes(version=version, repo_path=repo_path, branch=branch, commits=30, output_dir="./release_notes")
+        _output(ctx, result)
+        if not result.get("success"):
+            return
+        files = result.get("files", {})
+        gplay_notes_file = files.get("google_play")
+        appstore_notes_file = files.get("appstore")
+    else:
+        click.echo("\n📝 Step 2: 跳过 Release Notes")
+
+    # 3. 触发 Jenkins 并等待完成
+    click.echo("\n🔨 Step 3: 触发 Jenkins 构建...")
+    from tools.jenkins import trigger_build, get_latest_build_number, wait_for_build
+    t = trigger_build(platform=platform, mode="release", branch=branch)
+    _output(ctx, t)
+    if not t.get("success"):
+        return
+    after = get_latest_build_number(platform, "release")
+    click.echo(f"\n⏳ Step 4: 等待构建完成（每 {poll_interval}s 轮询，超时 {build_timeout}s）...")
+    w = wait_for_build(platform, "release", after_build_number=after, poll_interval=poll_interval, timeout_seconds=build_timeout)
+    _output(ctx, w)
+    if not w.get("success"):
+        click.echo("❌ 构建未成功，终止。")
+        return
+
+    build_number = w.get("build_number")
+    if skip_upload:
+        click.echo(f"\n✅ 构建完成 #{build_number}，已跳过上传。")
+        if platform == "android":
+            from tools.jenkins import resolve_android_aab_path
+            aab = resolve_android_aab_path(build_number) if build_number else None
+            if aab:
+                click.echo(f"   AAB: {aab}")
+        return
+
+    # 5. 上传
+    if platform == "android":
+        from tools.jenkins import resolve_android_aab_path
+        from tools.google_play import upload_bundle, promote
+        aab = resolve_android_aab_path(build_number) if build_number else None
+        if not aab or not os.path.isfile(aab):
+            click.echo(f"\n❌ 未找到 AAB（构建号 {build_number}），请检查 jenkins.build_output_dir 与产物路径约定。")
+            return
+        click.echo(f"\n📤 Step 5: 上传 AAB 到 Google Play...")
+        gplay_notes = None
+        if gplay_notes_file and os.path.isfile(gplay_notes_file):
+            with open(gplay_notes_file, "r", encoding="utf-8") as f:
+                gplay_notes = f.read().strip()
+        result = upload_bundle(aab_path=aab, track="beta", version=version, release_notes=gplay_notes, rollout_percentage=100.0)
+        _output(ctx, result)
+        if not result.get("success"):
+            return
+        vc = result.get("version_code")
+        if vc:
+            click.echo("📤 推广到 Internal...")
+            _output(ctx, promote(version_code=vc, from_track="beta", to_track="internal", version=version, release_notes=gplay_notes))
+        click.echo("\n🎉 Android 一键发布完成。")
+    else:
+        from tools.config import get_jenkins_ios_ipa_output_path
+        from tools.app_store import upload_ipa, create_version, update_release_notes
+        ipa = get_jenkins_ios_ipa_output_path()
+        if not ipa or not os.path.isfile(ipa):
+            click.echo(f"\n❌ 未找到 IPA: {ipa}，请确认 Jenkins 已将产物放到约定路径。")
+            return
+        click.echo("\n📤 Step 5: 上传 IPA 到 App Store Connect...")
+        result = upload_ipa(ipa_path=ipa)
+        _output(ctx, result)
+        if not result.get("success"):
+            return
+        click.echo(f"\n📋 创建版本 v{version}...")
+        cv = create_version(version_string=version)
+        _output(ctx, cv)
+        if cv.get("success") and cv.get("version_id") and appstore_notes_file and os.path.isfile(appstore_notes_file):
+            with open(appstore_notes_file, "r", encoding="utf-8") as f:
+                notes = f.read().strip()
+            _output(ctx, update_release_notes(version_id=cv["version_id"], release_notes=notes))
+        click.echo("\n🎉 iOS 一键发布完成。")
 
 
 @release.command("android")
@@ -755,14 +964,18 @@ def release_ios(ctx, version, ipa, repo_path, branch, commits, skip_notes, skip_
             click.echo("❌ Jenkins 构建触发失败。")
             return
         click.echo("\n⏳ Jenkins 正在构建，请等待完成。")
-        if not ipa:
-            click.echo(f"   构建完成后使用: python cli.py appstore upload --ipa <path-to-ipa>")
-            return
 
-    # Step 3: Upload IPA
+    # Step 3: Upload IPA（未指定 --ipa 时使用 config 中的 jenkins.ios_ipa_output_path）
     if not skip_upload:
         if not ipa:
-            click.echo("\n⚠️  未指定 IPA 路径，请提供 --ipa 参数。")
+            from tools.config import get_jenkins_ios_ipa_output_path
+            ipa = get_jenkins_ios_ipa_output_path()
+        if not ipa:
+            click.echo("\n⚠️  未指定 IPA 路径且未配置 jenkins.ios_ipa_output_path，请提供 --ipa 或配置约定路径。")
+            return
+        if not os.path.isfile(ipa):
+            click.echo(f"\n⚠️  IPA 文件不存在: {ipa}")
+            click.echo("   请确认 Jenkins 已构建完成并将产物放到约定路径，或使用 --ipa 指定路径。")
             return
 
         click.echo(f"\n📤 Step 3: 上传 IPA...")

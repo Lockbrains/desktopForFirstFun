@@ -39,7 +39,7 @@ You have access to the following tools:
 When the user asks to build/package without specifying all parameters, use these defaults:
 - **branch**: current branch
 - **build_type**: "App" for iOS, "APK" for Android
-- **table_env**: "dev" for debug builds, "test" for release builds
+- **table_env**: always "dev" (not configurable)
 - **install_type** (iOS only): "Adhoc"
 
 ## Behavior Guidelines

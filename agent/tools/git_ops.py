@@ -94,6 +94,42 @@ def git_branch_list(repo_path: str = ".") -> str:
     return r.stdout or "No branches found"
 
 
+def branch_exists(branch_name: str, repo_path: str = ".", remote: bool = True) -> bool:
+    """检查分支是否存在（默认检查远端 origin/branch）。"""
+    ref = f"origin/{branch_name}" if remote else branch_name
+    r = _run_git(["rev-parse", "--verify", ref], repo_path, check=False)
+    return r.returncode == 0
+
+
+def ensure_release_branch(
+    branch_name: str,
+    base: str = "main",
+    repo_path: str = ".",
+    push: bool = True,
+) -> dict:
+    """
+    确保 release 分支存在：不存在则从 base 创建并可选 push。
+    Returns: {"success": bool, "message": str, "branch": str, "created": bool}
+    """
+    if branch_exists(branch_name, repo_path, remote=True):
+        return {"success": True, "message": f"分支已存在: {branch_name}", "branch": branch_name, "created": False}
+    # 本地是否存在
+    if branch_exists(branch_name, repo_path, remote=False):
+        if push:
+            _run_git(["push", "-u", "origin", branch_name], repo_path, check=False)
+        return {"success": True, "message": f"本地分支已存在: {branch_name}", "branch": branch_name, "created": False}
+    # 先 fetch，再基于 origin/base 创建
+    _run_git(["fetch", "origin"], repo_path, check=False)
+    base_ref = f"origin/{base}" if not base.startswith("origin/") else base
+    _run_git(["branch", branch_name, base_ref], repo_path)
+    _run_git(["checkout", branch_name], repo_path)
+    if push:
+        r = _run_git(["push", "-u", "origin", branch_name], repo_path, check=False)
+        if r.returncode != 0:
+            return {"success": False, "message": f"推送失败: {r.stderr or r.stdout}", "branch": branch_name, "created": True}
+    return {"success": True, "message": f"已创建并检出: {branch_name}", "branch": branch_name, "created": True}
+
+
 def git_checkout(repo_path: str = ".", branch: str = "main") -> str:
     """切换分支。"""
     r = _run_git(["checkout", branch], repo_path)

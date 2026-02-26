@@ -109,7 +109,10 @@ def upload_ipa(
 
 
 def _upload_via_altool(ipa_path: str, api_key_id: str, api_issuer_id: str) -> dict:
-    """使用 xcrun altool 上传 IPA。"""
+    """
+    使用 xcrun altool 上传 IPA（与 Xcode 使用相同链路，Apple 侧会出现 PROCESSING 记录）。
+    p8 key 需位于 ~/.appstoreconnect/private_keys/AuthKey_<KEY_ID>.p8。
+    """
     cmd = [
         "xcrun", "altool",
         "--upload-app",
@@ -119,28 +122,31 @@ def _upload_via_altool(ipa_path: str, api_key_id: str, api_issuer_id: str) -> di
         "--apiIssuer", api_issuer_id,
     ]
 
+    print(f"  altool 上传中: {ipa_path}（超时 30 分钟）...", flush=True)
     try:
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
-            timeout=600,  # 10 分钟超时
+            timeout=1800,
         )
         if result.returncode == 0:
             return {
                 "success": True,
-                "message": f"IPA 上传成功 (altool)",
+                "message": "IPA 上传成功 (altool)，请用 appstore builds 确认 Apple 侧是否出现 PROCESSING 记录",
                 "stdout": result.stdout,
             }
         else:
+            stderr = (result.stderr or "")[-2000:]
+            stdout = (result.stdout or "")[-1000:]
             return {
                 "success": False,
-                "message": f"altool 上传失败 (exit {result.returncode})",
-                "stderr": result.stderr,
-                "stdout": result.stdout,
+                "message": f"altool 上传失败 (exit {result.returncode}): {stderr}",
+                "stderr": stderr,
+                "stdout": stdout,
             }
     except subprocess.TimeoutExpired:
-        return {"success": False, "message": "上传超时（10分钟）"}
+        return {"success": False, "message": "altool 上传超时（30 分钟）"}
     except FileNotFoundError:
         return {
             "success": False,
@@ -149,9 +155,12 @@ def _upload_via_altool(ipa_path: str, api_key_id: str, api_issuer_id: str) -> di
 
 
 def _upload_via_transporter(ipa_path: str, api_key_id: str, api_issuer_id: str) -> dict:
-    """使用 Transporter CLI 上传 IPA。"""
-    # Transporter 通常安装在 /usr/local/itms/bin/iTMSTransporter 或通过 xcrun
-    # macOS 上也可以使用 xcrun 来调用
+    """
+    使用 Transporter CLI 上传 IPA。
+    ⚠️ 已知问题：Transporter 返回成功但 Apple 侧不出现 PROCESSING 记录，
+    上传实际未生效。建议优先使用 altool。
+    """
+    print("  ⚠️ Transporter 已知存在"假成功"问题，建议改用 altool（--method altool）", flush=True)
     cmd = [
         "xcrun", "iTMSTransporter",
         "-m", "upload",
@@ -165,19 +174,19 @@ def _upload_via_transporter(ipa_path: str, api_key_id: str, api_issuer_id: str) 
             cmd,
             capture_output=True,
             text=True,
-            timeout=600,
+            timeout=1800,
         )
         if result.returncode == 0:
             return {
                 "success": True,
-                "message": "IPA 上传成功 (Transporter)",
+                "message": "Transporter 返回成功，但请务必用 appstore builds 验证 Apple 侧是否真正出现 PROCESSING 记录（此路径存在假成功问题）",
                 "stdout": result.stdout,
             }
         else:
             return {
                 "success": False,
                 "message": f"Transporter 上传失败 (exit {result.returncode})",
-                "stderr": result.stderr,
+                "stderr": (result.stderr or "")[-2000:],
             }
     except FileNotFoundError:
         return {
@@ -439,6 +448,60 @@ def get_app_status(
             "success": True,
             "app_name": app_result.get("name"),
             "versions": versions,
+        }
+    except Exception as e:
+        return {"success": False, "message": f"查询失败: {e}"}
+
+
+def list_builds(
+    bundle_id: Optional[str] = None,
+    limit: int = 20,
+) -> dict:
+    """
+    列出 App 的构建（builds）及 processing 状态。
+    用于确认「刚上传的 IPA 是否已出现在 App Store Connect、当前是 PROCESSING 还是 VALID」。
+
+    Returns:
+        success, message, builds: [{ build_id, version, processing_state, uploaded_date }]
+    """
+    app_result = get_app_id(bundle_id)
+    if not app_result.get("success"):
+        return app_result
+
+    app_id = app_result["app_id"]
+
+    try:
+        headers = _asc_headers()
+        resp = requests.get(
+            f"{ASC_API_BASE}/builds",
+            headers=headers,
+            params={
+                "filter[app]": app_id,
+                "limit": min(limit, 50),
+                "sort": "-uploadedDate",
+            },
+            timeout=30,
+        )
+
+        if not resp.ok:
+            return {"success": False, "message": f"API 错误: {resp.status_code} - {resp.text[:300]}"}
+
+        data = resp.json()
+        builds = []
+        for b in data.get("data", []):
+            attrs = b.get("attributes", {})
+            builds.append({
+                "build_id": b["id"],
+                "version": attrs.get("version"),
+                "processing_state": attrs.get("processingState", "UNKNOWN"),
+                "uploaded_date": attrs.get("uploadedDate"),
+                "expiration_date": attrs.get("expirationDate"),
+            })
+
+        return {
+            "success": True,
+            "app_name": app_result.get("name"),
+            "builds": builds,
         }
     except Exception as e:
         return {"success": False, "message": f"查询失败: {e}"}

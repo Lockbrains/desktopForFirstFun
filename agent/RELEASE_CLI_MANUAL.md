@@ -86,8 +86,10 @@ export GEMINI_API_KEY="your-gemini-api-key"
 | `gplay status` | 查询 Google Play 各轨道版本状态 |
 | `appstore upload` | 上传 .ipa 到 App Store Connect |
 | `appstore submit` | 提交 App Store 审核 |
-| `appstore status` | 查询 App Store Connect 审核状态 |
+| `appstore status` | 查询 App Store Connect 版本状态 |
+| `appstore builds` | 列出所有 build 及 processing 状态（PROCESSING/VALID/INVALID/FAILED） |
 | `release-notes generate` | 用 AI 从 git log 生成 release notes |
+| `release run` | **一键发布**：分支检查/创建 → 触发 Jenkins → 等待产物 → 上传（推荐 Agent 调用，避免多步超时） |
 | `jenkins trigger` | 触发 Jenkins 构建 |
 | `jenkins status` | 查询 Jenkins 构建状态 |
 | `git release-branch` | 创建 release 分支 |
@@ -335,6 +337,26 @@ python cli.py appstore status
     待审核版本: v1.2.3 - 审核中 (提交于 2026-02-17)
 ```
 
+### appstore builds
+
+列出该 App 在 App Store Connect 上的**所有构建（builds）**及 **processing 状态**，用于确认「刚上传的 IPA 是否已出现在 All Builds、当前是处理中还是就绪」。
+
+```bash
+python cli.py appstore builds
+python cli.py appstore builds -n 30
+```
+
+**processing_state 含义：**
+
+| 状态 | 说明 |
+|------|------|
+| `PROCESSING` | Apple 正在处理该 build，尚未就绪 |
+| `VALID` | 处理完成，可被选入版本并提交审核 |
+| `INVALID` | 构建无效 |
+| `FAILED` | 处理失败 |
+
+上传成功后可用此命令轮询，直到目标 build 变为 `VALID`，再在版本中选用该 build 并提交审核。
+
 ---
 
 ## Release Notes 生成
@@ -416,7 +438,7 @@ python cli.py jenkins trigger \
 | `--mode` | ✅ | - | `debug` 或 `release` |
 | `--branch` | ❌ | 当前分支 | 构建分支 |
 | `--build-type` | ❌ | 平台默认值 | Android: `APK`/`HotUpdate`; iOS: `App`/`HotUpdate` |
-| `--table-env` | ❌ | debug→`dev`, release→`test` | 表环境 |
+| 表格环境 | 固定 `dev` | 不可改 |
 | `--install-type` | ❌ | `Adhoc` | iOS 专用：`Adhoc`/`Xcode`/`TestFlight` |
 
 **Pipeline 映射：**
@@ -545,6 +567,37 @@ python cli.py status --version 1.2.3
 
 ---
 
+## 一键发布（release run）
+
+**推荐 Agent 或脚本只调用此命令**，避免多步编排导致 LLM 超时或中途误判完成。
+
+一条命令完成：检查/创建 release 分支 → 生成 Release Notes（可选）→ 触发 Jenkins → **轮询等待构建完成** → 按约定路径取产物 → 上传 Google Play / App Store（使用自带断点续传）。
+
+```bash
+# Android 一键发布 v2.0.6（分支默认 release_MMDD，如 release_0225）
+python cli.py release run -p android -v 2.0.6
+
+# iOS 一键发布，跳过 Release Notes
+python cli.py release run -p ios -v 2.0.6 --skip-notes
+
+# 只打包不上传（用于验证流水线）
+python cli.py release run -p android -v 2.0.6 --skip-upload
+```
+
+| 参数 | 说明 |
+|------|------|
+| `-p` / `--platform` | `android` 或 `ios` |
+| `-v` / `--version` | 版本号 |
+| `-b` / `--branch` | Release 分支名，不填则用 `release_MMDD`（如 release_0225） |
+| `--skip-notes` | 不生成 Release Notes |
+| `--skip-upload` | 只执行到“等待构建完成”，不上传 |
+| `--poll-interval` | 轮询 Jenkins 间隔（秒），默认 60 |
+| `--build-timeout` | 等待构建超时（秒），默认 7200（2 小时） |
+
+**约定**：Android 产物路径为 `jenkins.build_output_dir / StarFire-Android-Release / <构建号>/*.aab`；iOS 产物路径为 `jenkins.ios_ipa_output_path`。Jenkins 需按此约定输出。
+
+---
+
 ## 完整工作流示例
 
 ### 场景：发布 Wingstrike v1.2.3 到 Google Play
@@ -664,6 +717,11 @@ python cli.py status --version 1.2.3
 - Google Play 对 release notes 有 500 字符限制
 - 使用 `release-notes generate` 会自动生成符合限制的版本
 - 或手动精简 `--release-notes` 内容
+
+**`RedirectMissingLocation`（Google Play 上传）**
+- 现象：上传 AAB 时报错 "Redirected but the response is missing a Location: header"
+- 根因：Google Play 使用 **Resumable Upload**，会返回 **308 Resume Incomplete**（带 `Range` 表示已收到前 N 字节）；底层 HTTP 客户端若把 308 当作“需 Location 的重定向”处理，就会报此错。CLI 已修复：上传用到的 httplib2 已从 `redirect_codes` 中排除 308，使 308 由 googleapiclient 的分片逻辑处理并继续上传后续块。
+- 若仍出现：使用 `--debug`（或 `GPLAY_DEBUG=1`）保存完整输出（`2>&1 | tee upload.log`），并对照 Play Console「活动 / API 调用」排查
 
 **`ERROR: xcrun altool upload failed - invalid credentials`**
 - 检查 App Store Connect API Key 配置

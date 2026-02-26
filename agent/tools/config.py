@@ -93,6 +93,30 @@ def get_appstore_api_issuer_id() -> str:
     )
 
 
+def get_ios_workspace_path() -> str:
+    """Xcode workspace 路径（.xcworkspace 或含该文件的目录）。"""
+    return _deep_get(get_config(), "app", "ios", "workspace_path", default="")
+
+
+def get_ios_scheme() -> str:
+    """Archive 用的 Scheme 名称。"""
+    return _deep_get(get_config(), "app", "ios", "scheme", default="Wingstrike")
+
+
+def get_ios_export_options_plist() -> str:
+    """ExportOptions.plist 路径（Ad Hoc / App Store 导出配置）。"""
+    return _deep_get(get_config(), "app", "ios", "export_options_plist", default="")
+
+
+def get_jenkins_ios_ipa_output_path() -> str:
+    """Jenkins iOS Release 产出的 IPA 固定路径（用于自动上传）。"""
+    return _deep_get(
+        get_config(),
+        "jenkins", "ios_ipa_output_path",
+        default="/Users/ffmac/.jenkins/workspace/StarFire-iOS-Release-Pipeline/build/ipa_output/Wingstrike.ipa",
+    )
+
+
 # -- Jenkins --
 
 def get_jenkins_base_url() -> str:
